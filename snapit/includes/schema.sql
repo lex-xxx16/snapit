@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role ENUM('customer','staff','admin') NOT NULL DEFAULT 'customer',
     status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    avatar VARCHAR(255) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

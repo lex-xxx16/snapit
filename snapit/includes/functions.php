@@ -399,3 +399,102 @@ function is_staff_viewing_gallery() {
     if (basename($_SERVER['SCRIPT_NAME']) === 'index.php' && !empty($_GET['staff'])) return true;
     return false;
 }
+
+
+/* ---------------------------------------------------------------------
+   Profile pictures (uploads/avatars/)
+   --------------------------------------------------------------------- */
+function avatar_dir() {
+    return __DIR__ . '/../uploads/avatars';
+}
+
+/** Public URL of a stored avatar filename, or null when none. */
+function avatar_url($file) {
+    $file = basename((string)$file);
+    if ($file === '' || !preg_match('/^[A-Za-z0-9_\-]+\.(jpg|png|webp)$/', $file)) return null;
+    return site_url('uploads/avatars/' . $file);
+}
+
+/** Remove a stored avatar file from disk (filename only, never a path). */
+function avatar_delete_file($file) {
+    $file = basename((string)$file);
+    if ($file === '' || !preg_match('/^[A-Za-z0-9_\-]+\.(jpg|png|webp)$/', $file)) return;
+    $path = avatar_dir() . '/' . $file;
+    if (is_file($path)) @unlink($path);
+}
+
+/**
+ * Validate and store an uploaded profile picture.
+ * Returns [filename|null, error|null]. The image is decoded and re-encoded
+ * (square-cropped to 400x400) so nothing but pixel data is ever stored.
+ */
+function avatar_save_upload($file, $user_id) {
+    if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return [null, 'Please choose an image to upload.'];
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return [null, ($file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE)
+            ? 'That image is too large (2 MB maximum).' : 'Upload failed. Please try again.'];
+    }
+    if ($file['size'] > 2 * 1024 * 1024) return [null, 'That image is too large (2 MB maximum).'];
+    if (!is_uploaded_file($file['tmp_name'])) return [null, 'Upload failed. Please try again.'];
+
+    $info = @getimagesize($file['tmp_name']);
+    $types = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+    if (!$info || !isset($types[$info[2]])) return [null, 'Only JPG, PNG or WEBP images are allowed.'];
+    if ($info[0] < 32 || $info[1] < 32 || $info[0] > 6000 || $info[1] > 6000) {
+        return [null, 'Image dimensions are not supported (min 32px, max 6000px).'];
+    }
+    if (!function_exists('imagecreatefromstring')) {
+        // GD not enabled: store the already-validated image as-is (extension comes from the
+        // detected type, never from the client; uploads/ blocks script execution).
+        $ext = $types[$info[2]];
+        $dir = avatar_dir();
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true)) return [null, 'Could not save the image (upload folder not writable).'];
+        $name = (int)$user_id . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+        if (!@move_uploaded_file($file['tmp_name'], $dir . '/' . $name)) return [null, 'Could not save the image. Please try again.'];
+        return [$name, null];
+    }
+
+    $src = @imagecreatefromstring((string)file_get_contents($file['tmp_name']));
+    if (!$src) return [null, 'That file could not be read as an image.'];
+
+    $w = imagesx($src); $h = imagesy($src);
+    $side = min($w, $h);
+    $dst = imagecreatetruecolor(400, 400);
+    imagealphablending($dst, false); imagesavealpha($dst, true);
+    imagefill($dst, 0, 0, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+    imagecopyresampled($dst, $src, 0, 0, (int)(($w - $side) / 2), (int)(($h - $side) / 2), 400, 400, $side, $side);
+
+    $ext = ($info[2] === IMAGETYPE_JPEG) ? 'jpg' : 'png';   // transparency-safe output; webp -> png
+    $dir = avatar_dir();
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) return [null, 'Could not save the image (upload folder not writable).'];
+    $name = (int)$user_id . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+    $ok = ($ext === 'jpg')
+        ? (function () use ($dst, $dir, $name) { // flatten onto white for JPEG
+            $flat = imagecreatetruecolor(400, 400);
+            imagefill($flat, 0, 0, imagecolorallocate($flat, 255, 255, 255));
+            imagecopy($flat, $dst, 0, 0, 0, 0, 400, 400);
+            return imagejpeg($flat, $dir . '/' . $name, 88);
+        })()
+        : imagepng($dst, $dir . '/' . $name, 6);
+    if (!$ok) return [null, 'Could not save the image. Please try again.'];
+    return [$name, null];
+}
+
+/** Avatar filename of the logged-in user (cached in the session). */
+function current_user_avatar($conn) {
+    if (!is_loggedin()) return null;
+    if (!array_key_exists('avatar', $_SESSION)) {
+        $_SESSION['avatar'] = null;
+        try {
+            $s = mysqli_prepare($conn, "SELECT avatar FROM users WHERE user_id = ? LIMIT 1");
+            $uid = (int)$_SESSION['user_id'];
+            mysqli_stmt_bind_param($s, 'i', $uid);
+            mysqli_stmt_execute($s);
+            $row = mysqli_fetch_assoc(mysqli_stmt_get_result($s));
+            $_SESSION['avatar'] = $row['avatar'] ?? null;
+        } catch (Throwable $ex) { /* column not yet created: no avatar */ }
+    }
+    return $_SESSION['avatar'];
+}

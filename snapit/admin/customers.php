@@ -4,6 +4,10 @@ require_once __DIR__ . '/../includes/config.php';
 require_admin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf($_POST['csrf_token'] ?? '')) {
+        set_flash('Your session expired. Please try again.', 'danger');
+        redirect(site_url('admin/customers.php'));
+    }
     if (isset($_POST['action']) && $_POST['action'] === 'toggle_status' && isset($_POST['user_id'])) {
         $user_id = (int)$_POST['user_id'];
 
@@ -31,7 +35,7 @@ $search_term = "%{$search}%";
 
 if (!empty($search)) {
     $stmt = mysqli_prepare($conn, "
-        SELECT user_id, name, email, status, created_at
+        SELECT user_id, name, email, status, avatar, created_at
         FROM users
         WHERE role = 'customer' AND (name LIKE ? OR email LIKE ?)
         ORDER BY created_at DESC
@@ -39,7 +43,7 @@ if (!empty($search)) {
     mysqli_stmt_bind_param($stmt, 'ss', $search_term, $search_term);
 } else {
     $stmt = mysqli_prepare($conn, "
-        SELECT user_id, name, email, status, created_at
+        SELECT user_id, name, email, status, avatar, created_at
         FROM users
         WHERE role = 'customer'
         ORDER BY created_at DESC
@@ -53,9 +57,14 @@ include __DIR__ . '/../includes/alert.php';
 ?>
 
 <section class="container py-4">
-    <h1 class="fw-bold mb-4">
-        <i class="fa-solid fa-users me-2"></i>Customer Management
-    </h1>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <h1 class="fw-bold mb-0">
+            <i class="fa-solid fa-users me-2"></i>Customer Management
+        </h1>
+        <a href="<?= e(site_url('admin/customer_form.php')) ?>" class="btn btn-snapit fw-semibold">
+            <i class="fa-solid fa-user-plus me-2"></i>Add Customer
+        </a>
+    </div>
 
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body p-4">
@@ -120,10 +129,15 @@ include __DIR__ . '/../includes/alert.php';
                                 <tr>
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <div class="rounded-circle d-flex align-items-center justify-content-center me-3"
-                                                 style="width:42px;height:42px;background:linear-gradient(135deg,#3a2a1c,#1d140d);color:#fff;font-weight:700">
-                                                <?= e(strtoupper(substr($c['name'], 0, 1))) ?>
-                                            </div>
+                                            <?php $av = avatar_url($c['avatar'] ?? null); ?>
+                                            <?php if ($av): ?>
+                                                <img src="<?= e($av) ?>" alt="" class="me-3" style="width:42px;height:42px;border-radius:50%;object-fit:cover">
+                                            <?php else: ?>
+                                                <div class="avatar-circle rounded-circle d-flex align-items-center justify-content-center me-3"
+                                                     style="width:42px;height:42px;font-weight:700">
+                                                    <?= e(strtoupper(substr($c['name'], 0, 1))) ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <div>
                                                 <div class="fw-bold"><?= e($c['name']) ?></div>
                                                 <div class="small text-muted">ID: #<?= e((int)$c['user_id']) ?></div>
@@ -142,14 +156,26 @@ include __DIR__ . '/../includes/alert.php';
                                     </td>
                                     <td><?= e(format_date($c['created_at'])) ?></td>
                                     <td class="text-end">
+                                        <a href="<?= e(site_url('admin/customer_form.php?id=' . (int)$c['user_id'])) ?>" class="btn btn-sm btn-outline-light">
+                                            <i class="fa-solid fa-pen me-1"></i>Edit
+                                        </a>
                                         <form method="POST" class="d-inline"
                                               onsubmit="return confirm('Toggle customer status?');">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                                             <input type="hidden" name="action" value="toggle_status">
                                             <input type="hidden" name="user_id" value="<?= e((int)$c['user_id']) ?>">
                                             <button type="submit"
                                                 class="btn btn-sm <?= $c['status'] === 'active' ? 'btn-outline-warning' : 'btn-outline-success' ?>">
                                                 <i class="fa-solid <?= $c['status'] === 'active' ? 'fa-user-slash' : 'fa-user-check' ?> me-1"></i>
                                                 <?= $c['status'] === 'active' ? 'Deactivate' : 'Activate' ?>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="<?= e(site_url('admin/customer_delete.php')) ?>" class="d-inline"
+                                              onsubmit="return confirm('Permanently delete this customer account? This cannot be undone.');">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                                            <input type="hidden" name="user_id" value="<?= e((int)$c['user_id']) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="fa-regular fa-trash-can me-1"></i>Delete
                                             </button>
                                         </form>
                                     </td>

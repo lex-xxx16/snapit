@@ -1,0 +1,5 @@
+Options -Indexes -ExecCGI -Includes
+AddType text/plain .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .aspx .sh .cgi
+<FilesMatch "\.(?i:php|php3|php4|php5|phtml|pl|py|jsp|asp|aspx|sh|cgi)$">
+    Require all denied
+</FilesMatch>

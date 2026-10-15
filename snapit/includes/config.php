@@ -106,7 +106,7 @@ $mail_reply_to   = getenv('SNAPIT_MAIL_REPLY_TO')   ?: 'support@snapit.ph';
 
 // ---- First-run detection + self-healing schema ----
 if (session_status() === PHP_SESSION_NONE) { @session_start(); }
-if (empty($_SESSION['schema_ok_v3'])) {
+if (empty($_SESSION['schema_ok_v4'])) {
     $__t = mysqli_query($conn, "SHOW TABLES LIKE 'users'");
     if ($__t && mysqli_num_rows($__t) === 0 && !$__onInstaller) {
         require_once __DIR__ . '/functions.php';
@@ -119,6 +119,7 @@ if (empty($_SESSION['schema_ok_v3'])) {
         ['guest_sessions', 'countdown_seconds', "ALTER TABLE guest_sessions ADD COLUMN countdown_seconds TINYINT NOT NULL DEFAULT 3"],
         ['guest_sessions', 'mirror_preview', "ALTER TABLE guest_sessions ADD COLUMN mirror_preview TINYINT(1) NOT NULL DEFAULT 1"],
         ['guest_sessions', 'session_owner_user_id', "ALTER TABLE guest_sessions ADD COLUMN session_owner_user_id INT NULL AFTER guest_name, ADD INDEX idx_gs_owner (session_owner_user_id)"],
+        ['users', 'avatar', "ALTER TABLE users ADD COLUMN avatar VARCHAR(255) NULL AFTER status"],
         ['bookings', 'inventory_deducted', "ALTER TABLE bookings ADD COLUMN inventory_deducted TINYINT(1) NOT NULL DEFAULT 0"],
     ];
     foreach ($__ensure as $__e) {
@@ -127,5 +128,5 @@ if (empty($_SESSION['schema_ok_v3'])) {
             if ($__r && mysqli_num_rows($__r) === 0) { mysqli_query($conn, $__e[2]); }
         } catch (Throwable $__ex) { @error_log('[schema] ' . $__ex->getMessage()); }
     }
-    $_SESSION['schema_ok_v3'] = 1;
+    $_SESSION['schema_ok_v4'] = 1;
 }

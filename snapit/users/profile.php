@@ -7,6 +7,39 @@ require_login();
 $user_id = $_SESSION['user_id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf($_POST['csrf_token'] ?? '')) {
+        set_flash('Your session expired. Please try again.', 'danger');
+        redirect(site_url('users/profile.php'));
+    }
+
+    $action = $_POST['action'] ?? 'update_profile';
+
+    if ($action === 'upload_avatar' || $action === 'remove_avatar') {
+        $old_stmt = mysqli_prepare($conn, "SELECT avatar FROM users WHERE user_id = ? LIMIT 1");
+        mysqli_stmt_bind_param($old_stmt, 'i', $user_id);
+        mysqli_stmt_execute($old_stmt);
+        $old = mysqli_fetch_assoc(mysqli_stmt_get_result($old_stmt));
+        $old_file = $old['avatar'] ?? null;
+
+        if ($action === 'upload_avatar') {
+            [$new_file, $err] = avatar_save_upload($_FILES['avatar'] ?? null, $user_id);
+            if ($err) {
+                set_flash($err, 'danger');
+                redirect(site_url('users/profile.php'));
+            }
+        } else {
+            $new_file = null;
+        }
+
+        $upd = mysqli_prepare($conn, "UPDATE users SET avatar = ? WHERE user_id = ?");
+        mysqli_stmt_bind_param($upd, 'si', $new_file, $user_id);
+        mysqli_stmt_execute($upd);
+        if ($old_file) avatar_delete_file($old_file);
+        $_SESSION['avatar'] = $new_file;
+        set_flash($action === 'upload_avatar' ? 'Profile picture updated.' : 'Profile picture removed.', 'success');
+        redirect(site_url('users/profile.php'));
+    }
+
     $name = trim($_POST['name'] ?? '');
 
     $errors = [];
@@ -36,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect(site_url('users/profile.php'));
 }
 
-$user_stmt = mysqli_prepare($conn, "SELECT user_id, name, email, role, status, created_at FROM users WHERE user_id = ? LIMIT 1");
+$user_stmt = mysqli_prepare($conn, "SELECT user_id, name, email, role, status, avatar, created_at FROM users WHERE user_id = ? LIMIT 1");
 mysqli_stmt_bind_param($user_stmt, 'i', $user_id);
 mysqli_stmt_execute($user_stmt);
 $user_result = mysqli_stmt_get_result($user_stmt);
@@ -68,10 +101,16 @@ require __DIR__ . '/../includes/alert.php';
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-body text-center p-4">
                     <div class="mb-3">
-                        <div class="avatar-circle mx-auto mb-3 d-flex align-items-center justify-content-center text-white fw-bold"
-                            style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#4a3523,#1a120c);font-size:2.2rem">
-                            <?= e(strtoupper(substr($user['name'], 0, 1))) ?>
-                        </div>
+                        <?php $avatar_src = avatar_url($user['avatar'] ?? null); ?>
+                        <?php if ($avatar_src): ?>
+                            <img src="<?= e($avatar_src) ?>" alt="Profile picture of <?= e($user['name']) ?>"
+                                 class="mx-auto mb-3 d-block" style="width:100px;height:100px;border-radius:50%;object-fit:cover;border:2px solid var(--snapit-gold)">
+                        <?php else: ?>
+                            <div class="avatar-circle mx-auto mb-3 d-flex align-items-center justify-content-center text-white fw-bold"
+                                style="width:100px;height:100px;border-radius:50%;font-size:2.2rem">
+                                <?= e(strtoupper(substr($user['name'], 0, 1))) ?>
+                            </div>
+                        <?php endif; ?>
                         <h4 class="fw-bold mb-1"><?= e($user['name']) ?></h4>
                         <p class="text-muted mb-2"><?= e($user['email']) ?></p>
                         <span class="badge badge-snapit"><i class="fa-solid fa-user-tag me-1"></i><?= e(ucfirst($user['role'])) ?></span>
@@ -81,6 +120,27 @@ require __DIR__ . '/../includes/alert.php';
                     <div class="text-start small text-muted mt-3">
                         <div class="mb-2"><i class="fa-solid fa-calendar me-2"></i>Member since: <?= e(format_date($user['created_at'])) ?></div>
                     </div>
+                    <hr>
+                    <form action="<?= e(site_url('users/profile.php')) ?>" method="POST" enctype="multipart/form-data" class="text-start">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="upload_avatar">
+                        <label for="avatar" class="form-label fw-semibold">Profile Picture</label>
+                        <input type="file" class="form-control mb-2" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp" required>
+                        <div class="form-text mb-3">JPG, PNG or WEBP, up to 2 MB. It will be cropped to a square.</div>
+                        <button type="submit" class="btn btn-snapit btn-sm fw-semibold w-100">
+                            <i class="fa-solid fa-camera me-2"></i>Upload Picture
+                        </button>
+                    </form>
+                    <?php if (!empty($user['avatar'])): ?>
+                        <form action="<?= e(site_url('users/profile.php')) ?>" method="POST" class="mt-2"
+                              onsubmit="return confirm('Remove your profile picture?');">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="remove_avatar">
+                            <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                                <i class="fa-regular fa-trash-can me-2"></i>Remove Picture
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -92,6 +152,8 @@ require __DIR__ . '/../includes/alert.php';
                 </div>
                 <div class="card-body p-4">
                     <form action="<?= e(site_url('users/profile.php')) ?>" method="POST" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="update_profile">
                         <div class="mb-3">
                             <label for="name" class="form-label fw-semibold">Full Name</label>
                             <div class="input-group">

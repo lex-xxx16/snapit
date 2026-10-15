@@ -1,0 +1,31 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Snap It Booth</title>
+<style>body{margin:0;font:22px system-ui;background:#111;color:#fff;text-align:center}button{font-size:26px;padding:18px 32px;margin:8px;border-radius:14px;border:0}#v{width:100%;max-width:720px;border-radius:12px}#cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:240px;background:#0008}</style>
+<h1>Snap It</h1><div id=ui></div><div style="position:relative;display:inline-block"><video id=v autoplay playsinline muted></video><div id=cd></div></div><canvas id=c hidden></canvas><div id=shots></div>
+<script>
+const SLOTS={Solo:1,'4-pic':4,'6-pic':6};let cfg={filter:'none',layout:'Solo'},shots=[],idle;
+const $=id=>document.getElementById(id),ui=$('ui');
+function resetIdle(){clearTimeout(idle);idle=setTimeout(()=>{ui.textContent='Session ending...';setTimeout(done,3000)},180000)}
+['click','touchstart'].forEach(e=>addEventListener(e,resetIdle));
+function done(){shots=[];$('shots').innerHTML='';menu()}
+async function loadCams(){
+  try{(await navigator.mediaDevices.getUserMedia({video:true})).getTracks().forEach(t=>t.stop())}catch(e){}
+  const cams=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+  const sel=$('cam'); if(!sel) return;
+  sel.innerHTML=cams.map(d=>`<option value="${d.deviceId}">${d.label||'Camera'}</option>`).join('');
+  const saved=localStorage.getItem('snapit_cam'); if(saved&&cams.some(d=>d.deviceId===saved)) sel.value=saved;
+}
+function menu(){ui.innerHTML=`<p>Camera <select id=cam></select><br>Filter <select id=f><option value=none>None</option><option value="grayscale(1)">B&W</option><option value="sepia(.3) saturate(1.4)">Warm</option></select>
+ Layout <select id=l>${Object.keys(SLOTS).map(k=>`<option>${k}</option>`)}</select></p><button onclick="start()">Start</button><button onclick="done()">Done / New Guest</button>`;loadCams()}
+async function start(){cfg.filter=$('f').value;cfg.layout=$('l').value;$('v').style.filter=cfg.filter;shots=[];$('shots').innerHTML='';
+ const id=$('cam').value; localStorage.setItem('snapit_cam',id);
+ if($('v').srcObject) $('v').srcObject.getTracks().forEach(t=>t.stop());
+ $('v').srcObject=await navigator.mediaDevices.getUserMedia({video:id?{deviceId:{exact:id}}:{facingMode:'user'}});ui.innerHTML='';next()}
+async function next(){if(shots.length>=SLOTS[cfg.layout])return finish();
+ for(let n=3;n>0;n--){$('cd').style.display='flex';$('cd').textContent=n;await new Promise(r=>setTimeout(r,1000))}$('cd').style.display='none';
+ const v=$('v'),c=$('c');c.width=v.videoWidth;c.height=v.videoHeight;const x=c.getContext('2d');x.filter=cfg.filter;x.drawImage(v,0,0);const url=c.toDataURL('image/png');
+ ui.innerHTML=`<img src="${url}" width=240><br><button id=k>Keep</button><button id=r>Retake</button><button onclick="back()">Back</button>`;
+ $('k').onclick=()=>{shots.push(url);$('shots').insertAdjacentHTML('beforeend',`<img src="${url}" width=120>`);ui.innerHTML='';next()};$('r').onclick=()=>{ui.innerHTML='';next()}}
+function back(){ if(shots.length){shots=[];$('shots').innerHTML='';ui.innerHTML='';next()} else menu() }
+function finish(){ui.innerHTML='<p>All set! Compositing + upload goes here.</p><button onclick="done()">Done / New Guest</button>'}
+menu();resetIdle();
+</script>

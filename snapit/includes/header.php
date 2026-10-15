@@ -79,7 +79,8 @@ require_once __DIR__ . '/functions.php';
                 <?php if (is_loggedin()): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="<?= e(site_url('users/profile.php')) ?>">
-                            <i class="fa-regular fa-circle-user me-1"></i><?= e($_SESSION['name'] ?? 'Account') ?>
+                            <?php $__av = isset($conn) ? avatar_url(current_user_avatar($conn)) : null; ?>
+                            <?php if ($__av): ?><img src="<?= e($__av) ?>" alt="" width="24" height="24" class="me-1" style="border-radius:50%;object-fit:cover;vertical-align:middle"><?php else: ?><i class="fa-regular fa-circle-user me-1"></i><?php endif; ?><?= e($_SESSION['name'] ?? 'Account') ?>
                             <span class="badge badge-snapit ms-1"><?= e(ucfirst($_SESSION['role'] ?? 'customer')) ?></span>
                         </a>
                     </li>
