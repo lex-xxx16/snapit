@@ -1,0 +1,15 @@
+{
+    "name": "snap-it/photo-booth-rental",
+    "description": "Snap It Photo Customization Booth and Rental System",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "ext-mysqli": "*",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "PHPMailer\\PHPMailer\\": "vendor/phpmailer/phpmailer/src/"
+        }
+    }
+}

@@ -1,0 +1,10 @@
+Options -Indexes -ExecCGI
+AddType image/jpeg .jpg .jpeg
+AddType image/png .png
+AddType image/webp .webp
+<FilesMatch "\.(php|phtml|pl|py|cgi|sh|html|htm|shtml)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(htaccess|htpasswd|ini|log)$">
+    Require all denied
+</FilesMatch>

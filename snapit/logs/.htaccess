@@ -1,0 +1,4 @@
+# Prevent any web access to logs (error logs may contain paths, stack traces, PII).
+Require all denied
+Options -Indexes
+php_flag engine off

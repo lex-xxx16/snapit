@@ -1,0 +1,7 @@
+<?php
+// Copy to config.local.php and edit. install.php creates this file for you automatically.
+$db_host = '127.0.0.1';
+$db_port = 3306;        // XAMPP sometimes uses 3307
+$db_username = 'root';
+$db_passwd = '';
+$db_name = 'db_snapit';

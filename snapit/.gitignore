@@ -1,0 +1,4 @@
+includes/config.local.php
+includes/installed.lock
+logs/*.log
+uploads/sessions/*/
